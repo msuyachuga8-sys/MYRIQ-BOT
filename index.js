@@ -1,5 +1,5 @@
-const http = require("http");
-
+const express = require("express");
+const QRCode = require("qrcode");
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -8,38 +8,176 @@ const {
 
 const pino = require("pino");
 
+// =====================================
 // 🌐 RENDER WEB SERVER
+// =====================================
+
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-http.createServer((req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/plain"
-  });
+let currentQR = null;
+let botStatus = "Starting MYRIQ...";
 
-  res.end("🔥 MYRIQ WhatsApp Bot is running!");
-}).listen(PORT, () => {
-  console.log(`🔥 MYRIQ Web Server running on port ${PORT}`);
+// Browser page
+app.get("/", async (req, res) => {
+
+  if (currentQR) {
+
+    try {
+
+      const qrImage =
+        await QRCode.toDataURL(currentQR);
+
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport"
+                content="width=device-width, initial-scale=1.0">
+
+          <title>MYRIQ WhatsApp Bot</title>
+
+          <style>
+            body {
+              margin: 0;
+              padding: 30px;
+              background: #111;
+              color: white;
+              font-family: Arial, sans-serif;
+              text-align: center;
+            }
+
+            h1 {
+              font-size: 32px;
+            }
+
+            .box {
+              max-width: 450px;
+              margin: auto;
+              background: #222;
+              padding: 25px;
+              border-radius: 20px;
+            }
+
+            img {
+              width: 300px;
+              max-width: 90%;
+              background: white;
+              padding: 10px;
+              border-radius: 10px;
+            }
+
+            .status {
+              margin-top: 20px;
+              font-size: 20px;
+            }
+          </style>
+        </head>
+
+        <body>
+
+          <div class="box">
+
+            <h1>🔥 MYRIQ AI</h1>
+
+            <p>WhatsApp Bot</p>
+
+            <img src="${qrImage}" />
+
+            <div class="status">
+              📱 Scan this QR with WhatsApp
+            </div>
+
+            <p>
+              WhatsApp → Settings → Linked Devices
+              → Link a device
+            </p>
+
+          </div>
+
+        </body>
+        </html>
+      `);
+
+    } catch (error) {
+
+      res.send("❌ QR generation error");
+
+    }
+
+  } else {
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport"
+              content="width=device-width, initial-scale=1.0">
+
+        <title>MYRIQ Bot</title>
+
+        <style>
+          body {
+            background: #111;
+            color: white;
+            font-family: Arial;
+            text-align: center;
+            padding: 60px 20px;
+          }
+
+          h1 {
+            font-size: 35px;
+          }
+
+          .status {
+            font-size: 22px;
+            margin-top: 30px;
+          }
+        </style>
+      </head>
+
+      <body>
+
+        <h1>🔥 MYRIQ AI</h1>
+
+        <div class="status">
+          ${botStatus}
+        </div>
+
+        <p>
+          Refresh this page after a few seconds.
+        </p>
+
+      </body>
+      </html>
+    `);
+  }
 });
 
-// ⚙️ YOUR WHATSAPP NUMBER
-const PHONE_NUMBER = "255767108314";
+app.listen(PORT, () => {
 
-let isStarting = false;
-let pairingCodeRequested = false;
+  console.log(
+    `🔥 MYRIQ Web Server running on port ${PORT}`
+  );
 
+});
+
+// =====================================
 // 🤖 START MYRIQ
+// =====================================
+
 async function startMYRIQ() {
-
-  if (isStarting) return;
-
-  isStarting = true;
 
   try {
 
-    const { state, saveCreds } =
-      await useMultiFileAuthState("./auth");
+    const {
+      state,
+      saveCreds
+    } = await useMultiFileAuthState("./auth");
 
     const sock = makeWASocket({
+
       auth: state,
 
       logger: pino({
@@ -55,13 +193,21 @@ async function startMYRIQ() {
       ],
 
       connectTimeoutMs: 60000,
+
       defaultQueryTimeoutMs: 60000
+
     });
 
-    // 💾 SAVE CREDENTIALS
-    sock.ev.on("creds.update", saveCreds);
+    // Save credentials
+    sock.ev.on(
+      "creds.update",
+      saveCreds
+    );
 
-    // 🔌 CONNECTION
+    // =================================
+    // 🔌 CONNECTION UPDATE
+    // =================================
+
     sock.ev.on(
       "connection.update",
       async ({
@@ -70,97 +216,81 @@ async function startMYRIQ() {
         qr
       }) => {
 
-        // 🔐 PAIRING CODE
-        if (
-          qr &&
-          !sock.authState.creds.registered &&
-          !pairingCodeRequested
-        ) {
+        // QR RECEIVED
+        if (qr) {
 
-          pairingCodeRequested = true;
+          currentQR = qr;
 
-          try {
+          botStatus =
+            "📱 QR Code iko tayari!";
 
-            console.log("");
-            console.log("⏳ MYRIQ socket iko tayari...");
-            console.log("🔐 Inaomba WhatsApp Pairing Code...");
-
-            await new Promise(resolve =>
-              setTimeout(resolve, 5000)
-            );
-
-            const code =
-              await sock.requestPairingCode(
-                PHONE_NUMBER
-              );
-
-            const formattedCode =
-              code.match(/.{1,4}/g)?.join("-") ||
-              code;
-
-            console.log("");
-            console.log("======================================");
-            console.log("🔥 MYRIQ WHATSAPP PAIRING CODE");
-            console.log("======================================");
-            console.log(`📱 Namba: ${PHONE_NUMBER}`);
-            console.log(`🔑 CODE: ${formattedCode}`);
-            console.log("======================================");
-            console.log("");
-            console.log("📲 WhatsApp → Settings");
-            console.log("➡️ Linked Devices");
-            console.log("➡️ Link a device");
-            console.log("➡️ Link with phone number instead");
-            console.log("");
-            console.log("⚠️ Tumia code hiyo kwenye WhatsApp.");
-            console.log("");
-
-          } catch (error) {
-
-            console.log("");
-            console.log("❌ IMESHINDWA KUPATA PAIRING CODE");
-            console.log(error);
-            console.log("");
-
-            pairingCodeRequested = false;
-          }
+          console.log("");
+          console.log(
+            "================================"
+          );
+          console.log(
+            "🔥 MYRIQ QR CODE READY"
+          );
+          console.log(
+            "🌐 Fungua Render URL kuiona"
+          );
+          console.log(
+            "================================"
+          );
+          console.log("");
         }
 
-        // ✅ CONNECTED
+        // CONNECTED
         if (connection === "open") {
 
-          console.log("");
-          console.log("======================================");
-          console.log("🔥🔥🔥 MYRIQ BOT IMEUNGANISHWA!");
-          console.log("📱 WhatsApp Connected ✅");
-          console.log("🤖 MYRIQ iko online!");
-          console.log("======================================");
-          console.log("");
+          currentQR = null;
 
-          isStarting = false;
+          botStatus =
+            "🔥 MYRIQ IMEUNGANISHWA NA WHATSAPP!";
+
+          console.log("");
+          console.log(
+            "================================"
+          );
+          console.log(
+            "🔥🔥🔥 MYRIQ BOT CONNECTED!"
+          );
+          console.log(
+            "📱 WhatsApp Connected ✅"
+          );
+          console.log(
+            "================================"
+          );
+          console.log("");
         }
 
-        // ❌ CLOSED
+        // CLOSED
         if (connection === "close") {
 
-          const statusCode =
-            lastDisconnect?.error?.output?.statusCode;
+          currentQR = null;
 
-          console.log("");
+          const statusCode =
+            lastDisconnect
+              ?.error
+              ?.output
+              ?.statusCode;
+
           console.log(
             `❌ WhatsApp connection closed. Code: ${statusCode}`
           );
 
           const shouldReconnect =
-            statusCode !== DisconnectReason.loggedOut;
+            statusCode !==
+            DisconnectReason.loggedOut;
 
           if (shouldReconnect) {
+
+            botStatus =
+              "🔄 Reconnecting to WhatsApp...";
 
             console.log(
               "🔄 MYRIQ inajaribu kuunganishwa tena..."
             );
-
-            isStarting = false;
-            pairingCodeRequested = false;
 
             setTimeout(() => {
               startMYRIQ();
@@ -168,17 +298,19 @@ async function startMYRIQ() {
 
           } else {
 
-            console.log(
-              "🚪 MYRIQ ime-logout kwenye WhatsApp."
-            );
+            botStatus =
+              "❌ MYRIQ ime-logout.";
 
-            isStarting = false;
           }
         }
+
       }
     );
 
+    // =====================================
     // 💬 MESSAGE HANDLER
+    // =====================================
+
     sock.ev.on(
       "messages.upsert",
       async ({ messages }) => {
@@ -188,22 +320,31 @@ async function startMYRIQ() {
           const msg = messages[0];
 
           if (!msg) return;
+
           if (!msg.message) return;
+
           if (msg.key.fromMe) return;
 
           const text =
             msg.message.conversation ||
-            msg.message.extendedTextMessage?.text ||
+            msg.message
+              .extendedTextMessage
+              ?.text ||
             "";
 
           const cleanText =
-            text.trim().toLowerCase();
+            text
+              .trim()
+              .toLowerCase();
 
           console.log(
-            `📩 Message received: ${text}`
+            `📩 Message: ${text}`
           );
 
-          // 🏓 .PING
+          // ===============================
+          // 🏓 PING
+          // ===============================
+
           if (cleanText === ".ping") {
 
             await sock.sendMessage(
@@ -227,7 +368,9 @@ async function startMYRIQ() {
             "❌ Message error:",
             error
           );
+
         }
+
       }
     );
 
@@ -238,13 +381,15 @@ async function startMYRIQ() {
       error
     );
 
-    isStarting = false;
-
     setTimeout(() => {
       startMYRIQ();
     }, 5000);
   }
+
 }
 
-// 🚀 START MYRIQ
+// =====================================
+// 🚀 START
+// =====================================
+
 startMYRIQ();
