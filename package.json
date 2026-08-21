@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "latest",
-    "pino": "latest"
+    "@whiskeysockets/baileys": "7.0.0-rc.6",
+    "pino": "10.1.0"
   }
 }
