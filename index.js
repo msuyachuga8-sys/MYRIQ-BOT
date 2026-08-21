@@ -1,4 +1,5 @@
 const http = require("http");
+
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -7,7 +8,10 @@ const {
 
 const pino = require("pino");
 
-// Web server kwa Render
+// ===============================
+// 🌐 WEB SERVER - RENDER
+// ===============================
+
 const PORT = process.env.PORT || 3000;
 
 http.createServer((req, res) => {
@@ -17,35 +21,90 @@ http.createServer((req, res) => {
   console.log(`🔥 MYRIQ Web Server running on port ${PORT}`);
 });
 
+// ===============================
+// 📱 MYRIQ WHATSAPP BOT
+// ===============================
+
 async function startMYRIQ() {
-  const { state, saveCreds } = await useMultiFileAuthState("./auth");
+  const { state, saveCreds } =
+    await useMultiFileAuthState("./auth");
 
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: "silent" }),
-    printQRInTerminal: true
+
+    // ❌ QR OFF
+    printQRInTerminal: false
   });
 
+  // Save WhatsApp credentials
   sock.ev.on("creds.update", saveCreds);
 
+  // ===============================
+  // 🔐 PAIRING CODE
+  // ===============================
+
+  if (!sock.authState.creds.registered) {
+
+    // WEKA NAMBA YAKO HAPA
+    // Mfano: 255712345678
+    const phoneNumber = "255767108314;
+
+    try {
+      const code = await sock.requestPairingCode(phoneNumber);
+
+      console.log("");
+      console.log("=================================");
+      console.log("🔥 MYRIQ WHATSAPP PAIRING CODE");
+      console.log("=================================");
+      console.log(`🔑 CODE: ${code}`);
+      console.log("=================================");
+      console.log("");
+    } catch (error) {
+      console.log("❌ Imeshindwa kupata pairing code:");
+      console.log(error);
+    }
+  }
+
+  // ===============================
+  // 🔄 CONNECTION
+  // ===============================
+
   sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
+
     if (connection === "open") {
-      console.log("🔥 MYRIQ BOT IMEUNGANISHWA NA WHATSAPP!");
+      console.log("");
+      console.log("=================================");
+      console.log("🔥 MYRIQ BOT IMEUNGANISHWA!");
+      console.log("📱 WhatsApp Connected ✅");
+      console.log("=================================");
+      console.log("");
     }
 
     if (connection === "close") {
+
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut;
 
       if (shouldReconnect) {
         console.log("🔄 MYRIQ inajaribu kuunganishwa tena...");
-        startMYRIQ();
+
+        setTimeout(() => {
+          startMYRIQ();
+        }, 3000);
+      } else {
+        console.log("❌ MYRIQ ime-logout kwenye WhatsApp.");
       }
     }
   });
 
+  // ===============================
+  // 💬 MESSAGE HANDLER
+  // ===============================
+
   sock.ev.on("messages.upsert", async ({ messages }) => {
+
     const msg = messages[0];
 
     if (!msg.message || msg.key.fromMe) return;
@@ -55,12 +114,26 @@ async function startMYRIQ() {
       msg.message.extendedTextMessage?.text ||
       "";
 
-    if (text.toLowerCase() === ".ping") {
+    console.log(`📩 Message: ${text}`);
+
+    // ===============================
+    // 🏓 PING
+    // ===============================
+
+    if (text.toLowerCase().trim() === ".ping") {
+
       await sock.sendMessage(msg.key.remoteJid, {
-        text: "🔥 MYRIQ BOT\n\nPong! ⚡\nBot iko online."
+        text:
+          "🔥 MYRIQ BOT\n\n" +
+          "Pong! ⚡\n" +
+          "Bot iko online."
       });
     }
   });
 }
+
+// ===============================
+// 🚀 START MYRIQ
+// ===============================
 
 startMYRIQ();
