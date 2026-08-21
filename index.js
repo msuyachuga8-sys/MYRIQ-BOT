@@ -48,7 +48,7 @@ async function startMYRIQ() {
 
     // WEKA NAMBA YAKO HAPA
     // Mfano: 255712345678
-    const phoneNumber = "255767108314;
+    const phoneNumber = "255767108314";
 
     try {
       const code = await sock.requestPairingCode(phoneNumber);
