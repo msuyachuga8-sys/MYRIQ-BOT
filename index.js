@@ -1,3 +1,4 @@
+const http = require("http");
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -5,6 +6,16 @@ const {
 } = require("@whiskeysockets/baileys");
 
 const pino = require("pino");
+
+// Web server kwa Render
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("🔥 MYRIQ WhatsApp Bot is running!");
+}).listen(PORT, () => {
+  console.log(`🔥 MYRIQ Web Server running on port ${PORT}`);
+});
 
 async function startMYRIQ() {
   const { state, saveCreds } = await useMultiFileAuthState("./auth");
@@ -28,7 +39,7 @@ async function startMYRIQ() {
         DisconnectReason.loggedOut;
 
       if (shouldReconnect) {
-        console.log("MYRIQ inajaribu kuunganishwa tena...");
+        console.log("🔄 MYRIQ inajaribu kuunganishwa tena...");
         startMYRIQ();
       }
     }
